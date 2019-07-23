@@ -1,9 +1,6 @@
 #ifndef __GAME_OBJECTS_H
 #define __GAME_OBJECTS_H
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #define LCD_HEIGHT  240
 #define LCD_WIDTH 320
 
@@ -12,34 +9,26 @@
 #define PLAYER_WIDTH 8
 #define PLAYER_HEIGHT 8 
 
-#define BULLET_VEL_X 10
+#define BULLET_VEL_X 12
 #define BULLET_VEL_Y 0
-#define BULLET_WIDTH 10
-#define BULLET_HEIGHT 5 
+#define BULLET_WIDTH 8
+#define BULLET_HEIGHT 4 
 
-#define GOOSE_MIN_X_VEL 5
-#define GOOSE_MAX_X_VEL 10
-#define GOOSE_MIN_Y_VEL 5
-#define GOOSE_MAX_Y_VEL 10
-#define GOOSE_HEIGHT 25
-#define GOOSE_WIDTH 25
+#define GOOSE_MIN_X_VEL 3
+#define GOOSE_MAX_X_VEL 6
+#define GOOSE_MIN_Y_VEL 3
+#define GOOSE_MAX_Y_VEL 6
+#define GOOSE_HEIGHT 20
+#define GOOSE_WIDTH 20
 
 #define GOOSE_MIN_SPAWN_HEIGHT 40
 #define GOOSE_MAX_SPAWN_HEIGHT 200
-#define GOOSE_MIN_SPAWN_INTERVAL 1000
-#define GOOSE_MAX_SPAWN_INTERVAL 1500
-
-typedef enum{
-	PLAYER,
-	BULLET,
-	GOOSE,
-}TYPE;
+#define GOOSE_MIN_SPAWN_INTERVAL 1200
+#define GOOSE_MAX_SPAWN_INTERVAL 1400
 
 typedef struct{
-	int32_t x_pos, y_pos, width, height, x_vel, y_vel;
-	TYPE type;
-	unsigned short* object_bitmap;
-	unsigned short* clear_box_bitmap;
+	 int x_pos, y_pos, width, height, x_vel, y_vel;
+	 unsigned short* object_bitmap;
 }_GAME_OBJECT_T;
 
 typedef struct node{
@@ -51,18 +40,23 @@ typedef struct node{
 typedef struct{
 	GAME_OBJECT_T* head;
 	GAME_OBJECT_T* tail;
-	uint32_t size;
+	int size;
 }OBJECT_LIST_T;
 
 
-_GAME_OBJECT_T* create_player(int32_t x_pos, int32_t y_pos);
-_GAME_OBJECT_T* create_bullet(int32_t x_pos, int32_t y_pos);
-_GAME_OBJECT_T* create_goose(int32_t x_pos, int32_t y_pos, int32_t x_vel, int32_t y_vel);
+_GAME_OBJECT_T* create_player(int x_pos, int y_pos);
+_GAME_OBJECT_T* create_bullet(int x_pos, int y_pos);
+_GAME_OBJECT_T* create_goose(int x_pos, int y_pos, int x_vel, int y_vel);
+
+void clear(_GAME_OBJECT_T* obj);
+void draw(_GAME_OBJECT_T* obj);
 
 OBJECT_LIST_T* create_game_object_list(void);
 void add_object(OBJECT_LIST_T* list, _GAME_OBJECT_T* object);
-bool remove_object(OBJECT_LIST_T* list, GAME_OBJECT_T* object);
+int remove_object(OBJECT_LIST_T* list, GAME_OBJECT_T* object);
+void empty_list(OBJECT_LIST_T* list);
+void draw_list(OBJECT_LIST_T* list);
 
-bool collide(_GAME_OBJECT_T* obj1, _GAME_OBJECT_T* obj2);
+int collide(_GAME_OBJECT_T* obj1, _GAME_OBJECT_T* obj2);
 
 #endif

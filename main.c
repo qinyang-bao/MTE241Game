@@ -1,13 +1,19 @@
+//#define DEBUG
+
 #include <cmsis_os2.h>
 #include <lpc17xx.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include "uart.h"
+#include <stdio.h>
 #include "lfsr113.h"
 #include "GLCD.h"
 #include "game_object.h"
+
+#ifdef DEBUG
+#include "uart.h"
+#endif
+
+#define true 1
+#define false 0
 
 #define GAME_START 1
 #define GAME_END 1
@@ -18,11 +24,11 @@
 #define ADC_MAX 4096.
 #define adc_to_player_pos(x) (int)(x * (LCD_HEIGHT - PLAYER_HEIGHT) / ADC_MAX ) 
 	
-#define MAX_LIFE 1
+#define MAX_LIFE 8
 
 OBJECT_LIST_T* geese_list, * bullet_list;
 _GAME_OBJECT_T* player;
-int32_t lives_remaining;
+int32_t lives_remaining, highest_score = 0, current_score;
 
 osEventFlagsId_t game_states, game_start;
 osMutexId_t lcd_mutex;
@@ -33,13 +39,19 @@ void init_game(void){
 	bullet_list = create_game_object_list();
 	
 	lives_remaining = MAX_LIFE;
+	current_score = 0;
+	
+	// use mutex to protect the LCD resource
+	osMutexAcquire(lcd_mutex, osWaitForever);
+	GLCD_Clear(White);
+	osMutexRelease(lcd_mutex);
 }
 
 volatile int ADC_val = 0;
-bool button_press_ready = true;
+int button_press_ready = true;
 
 void input_reader(void * arg){
-	int reading_rate = 100;
+	int reading_rate = 25;
 	
 	// Setup ADC
 	LPC_PINCON -> PINSEL1 &= ~(0x03 << 18);
@@ -73,7 +85,7 @@ void input_reader(void * arg){
 		}
 		
 		// if game ends, a button press would start the game
-		uint32_t game_flags = osEventFlagsGet(game_states);
+		int game_flags = osEventFlagsGet(game_states);
 		if( (game_flags & BUTTON_PRESSED) && (game_flags & GAME_END) ){
 			osEventFlagsClear(game_states, GAME_END);
 			osEventFlagsClear(game_states, BUTTON_PRESSED);
@@ -105,7 +117,7 @@ void bullet_spawner(void* arg){
 	int rate = 100;
 	
 	while(true){
-		uint32_t game_flags = osEventFlagsGet(game_states);
+		int game_flags = osEventFlagsGet(game_states);
 		if( (game_flags & BUTTON_PRESSED) && !(game_flags & GAME_END)){
 			osEventFlagsClear(game_states, BUTTON_PRESSED);
 			add_object(bullet_list, create_bullet(player->x_pos, player->y_pos));
@@ -116,7 +128,7 @@ void bullet_spawner(void* arg){
 	}
 }
 
-uint32_t random_range(uint32_t min, uint32_t max){
+int random_range(int min, int max){
 	return min + lfsr113()%(max-min);
 }
 
@@ -132,13 +144,14 @@ void goose_spawner(void* arg){
 			//printf("goose spawned y: %d, vx: %d vy: %d\n", goose_pos_y, goose_vel_x, goose_vel_y);
 			add_object(geese_list, create_goose(goose_pos_x, goose_pos_y, goose_vel_x, goose_vel_y));
 		}
+
 		osDelay(random_range(GOOSE_MIN_SPAWN_INTERVAL, GOOSE_MAX_SPAWN_INTERVAL));
 		
 	}
 }
 
 void LCD_updater(void* arg){
-	int fps = 10;
+	int fps = 20;
 	
 	GAME_OBJECT_T* currentBullet;
 	GAME_OBJECT_T* currentGoose;
@@ -148,8 +161,13 @@ void LCD_updater(void* arg){
 	while(true){
 		if(!(osEventFlagsGet(game_states) & GAME_END)){
 			
-			// update player position
-			player->y_pos = adc_to_player_pos(ADC_val);
+			/* update */
+			// update player position. The player's position is directly correlated to the
+			// position of the potentiometer. It is not updated using a velocity. Here we
+			// record its "sudo" velocity to be used later for drawing and clearing
+			int player_new_y_pos = adc_to_player_pos(ADC_val);
+			player->y_vel = player_new_y_pos - player->y_pos;
+			player->y_pos = player_new_y_pos;
 			
 			// update bullet position
 			currentBullet = bullet_list ->head ;
@@ -199,17 +217,8 @@ void LCD_updater(void* arg){
 								nextBullet = currentBullet->next;
 								if (collide(currentGoose->self, currentBullet->self))
 								{
-									GLCD_Bitmap(currentGoose->self->x_pos-currentGoose->self->x_vel, 
-											currentGoose->self->y_pos-currentGoose->self->y_vel, 
-											currentGoose->self->width, 
-											currentGoose->self->height, 
-											(unsigned char*)currentGoose->self->clear_box_bitmap);
-									
-									GLCD_Bitmap(currentBullet->self->x_pos-currentBullet->self->width,
-											currentBullet->self->y_pos, 
-											currentBullet->self->x_vel, 
-											currentBullet->self->height, 
-											(unsigned char*)currentBullet->self->clear_box_bitmap);
+									clear(currentGoose->self);
+									clear(currentBullet->self);
 									
 									remove_object(geese_list, currentGoose);
 									remove_object(bullet_list, currentBullet);
@@ -225,65 +234,31 @@ void LCD_updater(void* arg){
 				}while(currentGoose != NULL);
 			}
 			
+			/* draw new positions */
 			// use mutex to protect the LCD resource
 			osMutexAcquire(lcd_mutex, osWaitForever);
 			
-			currentBullet = bullet_list ->head ;
-			currentGoose = geese_list ->head ;
-
-			//Draw Geese on screen
-			if (currentGoose != NULL){
-				do{
-					GLCD_Bitmap(currentGoose->self->x_pos-currentGoose->self->x_vel, 
-											currentGoose->self->y_pos-currentGoose->self->y_vel, 
-											currentGoose->self->width, 
-											currentGoose->self->height, 
-											(unsigned char*)currentGoose->self->clear_box_bitmap);
-					
-					GLCD_Bitmap(currentGoose->self->x_pos,currentGoose->self->y_pos, 
-											currentGoose->self->width, currentGoose->self->height, 
-											(unsigned char*)currentGoose->self->object_bitmap);
-					
-					currentGoose = currentGoose->next;
-				}while(currentGoose != NULL);
-			}
-
-			//Draw Bullets on screen
-			if (currentBullet != NULL){
-				do{
-					GLCD_Bitmap(currentBullet->self->x_pos-currentBullet->self->width,
-											currentBullet->self->y_pos, 
-											currentBullet->self->x_vel, 
-											currentBullet->self->height, 
-											(unsigned char*)currentBullet->self->clear_box_bitmap);
-					
-					GLCD_Bitmap(currentBullet->self->x_pos,currentBullet->self->y_pos, 
-											currentBullet->self->width, currentBullet->self->height, 
-											(unsigned char*)currentBullet->self->object_bitmap);
-					
-					currentBullet = currentBullet->next;
-				}while(currentBullet != NULL);
-			}
-
-			//Draw Player on screen
-			GLCD_Bitmap(0, 0, player->width, LCD_HEIGHT, (unsigned char*)player->clear_box_bitmap);
-			GLCD_Bitmap(player->x_pos, player->y_pos, player->width, player->height, (unsigned char*)player->object_bitmap);
+			draw_list(bullet_list);
+			draw_list(geese_list);
+			
+			clear(player);
+			draw(player);
+			
+			osMutexRelease(lcd_mutex);
 		}
-		
-		osMutexRelease(lcd_mutex);
 		
 		osDelay(osKernelGetTickFreq() / fps);
 	}
 }
 
 
-void num_to_led(uint32_t num){
+void num_to_led(int num){
 	//Turn off LEDs	
 	LPC_GPIO1->FIOCLR |= 0XB0000000; 
 	LPC_GPIO2->FIOCLR |= 0x0000007C;
 	
 	
-	uint32_t bin = 0;
+	int bin = 0;
 	while (num > 0){
 		bin = bin << 1;
 		bin |= 1;
@@ -300,37 +275,37 @@ void num_to_led(uint32_t num){
 
 
 void game_end(void){
+	//update highest score if needed
+	if(current_score > highest_score){
+		highest_score = current_score;
+	}
+	
 	// use mutex to protect the LCD resource
 	osMutexAcquire(lcd_mutex, osWaitForever);
+	
+	//clear the LCD
 	GLCD_Clear(White);
+	
+	GLCD_DisplayString(1,0,1,  (unsigned char*)"Game End!");
+	
+	char* score_string = (char*)malloc(50 * sizeof(char));
+	sprintf(score_string, "score: %d, highest score: %d", current_score, highest_score);
+	GLCD_DisplayString(9,0,0,  (unsigned char*)score_string);
+	
 	osMutexRelease(lcd_mutex);
 	
 	//remove all game object and clear the screen
 	free(player);
-	
-	GAME_OBJECT_T* currentBullet = bullet_list ->head ;
-	if (currentBullet != NULL){
-		do {
-			remove_object(bullet_list, currentBullet);
-			currentBullet = currentBullet->next;
-			} while(currentBullet != NULL);
-	}
-	
-	GAME_OBJECT_T* currentGoose = geese_list ->head ;
-	if (currentGoose != NULL){
-		do {
-			remove_object(geese_list, currentGoose);
-			currentGoose = currentGoose->next;
-			} while(currentGoose != NULL);
-	}
+	empty_list(bullet_list);
+	empty_list(geese_list);
 }
 
 
 void state_monitor(void* arg){
-	int rate = 100;
+	int rate = 10;
 	
 	while(true){
-		uint32_t game_flags = osEventFlagsGet(game_states);
+		int game_flags = osEventFlagsGet(game_states);
 		
 		// if game is not ended, display the remaining lives as LEDs
 		if (!(game_flags & GAME_END)){
@@ -347,6 +322,9 @@ void state_monitor(void* arg){
 				game_end();
 				osEventFlagsSet(game_states, GAME_END);
 			}
+			
+			//update score
+			current_score += 1;
 		} 
 		
 		osDelay(osKernelGetTickFreq() / rate);
@@ -356,7 +334,9 @@ void state_monitor(void* arg){
 
 void init_peripherals(void){
 	// init uart
+	#ifdef DEBUG
 	printf("Init\n");
+	#endif 
 	
 	//setup LCD
 	GLCD_Init();
@@ -372,7 +352,12 @@ void init_peripherals(void){
 
 
 void welcome(void){
-	GLCD_DisplayString(1,0,1,  (unsigned char*)"     q1     q2");
+	
+	GLCD_DisplayString(1,0,0,  (unsigned char*)"Welcome, warrior!");
+	GLCD_DisplayString(3,0,0,  (unsigned char*)"Use potentiometer to move up and down");
+	GLCD_DisplayString(5,0,0,  (unsigned char*)"Use pushbutton to shoot");
+	GLCD_DisplayString(7,0,0,  (unsigned char*)"Press push button to start!");
+	
 }
 
 int main(){
