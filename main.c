@@ -121,7 +121,6 @@ void bullet_spawner(void* arg){
 		if( (game_flags & BUTTON_PRESSED) && !(game_flags & GAME_END)){
 			osEventFlagsClear(game_states, BUTTON_PRESSED);
 			add_object(bullet_list, create_bullet(player->x_pos, player->y_pos));
-			//printf("bullet spawned\n");
 		}
 		
 		osDelay(osKernelGetTickFreq()/ rate);
@@ -141,11 +140,10 @@ void goose_spawner(void* arg){
 			int32_t goose_vel_x = -1 * random_range(GOOSE_MIN_X_VEL, GOOSE_MAX_X_VEL);
 			int32_t goose_vel_y = (lfsr113() % 2 == 0 ? 1 : -1) * random_range(GOOSE_MIN_Y_VEL, GOOSE_MAX_Y_VEL);
 			
-			//printf("goose spawned y: %d, vx: %d vy: %d\n", goose_pos_y, goose_vel_x, goose_vel_y);
 			add_object(geese_list, create_goose(goose_pos_x, goose_pos_y, goose_vel_x, goose_vel_y));
 		}
 
-		osDelay(random_range(GOOSE_MIN_SPAWN_INTERVAL, GOOSE_MAX_SPAWN_INTERVAL));
+		osDelay(random_range(GOOSE_MIN_SPAWN_INTERVAL, GOOSE_MAX_SPAWN_INTERVAL));// / (current_score / 250 + 1) * 1.5 );
 		
 	}
 }
@@ -190,7 +188,7 @@ void LCD_updater(void* arg){
 				
 			if (currentGoose != NULL){
 				do {
-					//printf("gx: %d, gy: %d \n", currentGoose->self->x_pos, currentGoose->self->y_pos);
+		
 					nextGoose = currentGoose->next;
 					
 					// geese bounce off the edges
@@ -291,6 +289,8 @@ void game_end(void){
 	char* score_string = (char*)malloc(50 * sizeof(char));
 	sprintf(score_string, "score: %d, highest score: %d", current_score, highest_score);
 	GLCD_DisplayString(9,0,0,  (unsigned char*)score_string);
+	
+	GLCD_DisplayString(11,0,0,  (unsigned char*)"Press pushbutton to start again");
 	
 	osMutexRelease(lcd_mutex);
 	

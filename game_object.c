@@ -5,7 +5,7 @@
 #define true 1
 #define false 0
 
-#define COLLID_TOL 6
+#define COLLID_TOL 8
 #define CLEAR_BOX_SIZE 4
 
 unsigned short player_map [] = 
@@ -65,24 +65,11 @@ OBJECT_LIST_T* create_game_object_list(void){
 
 void clear(_GAME_OBJECT_T* obj){
 	GLCD_Bitmap(obj->x_pos - obj->x_vel, obj->y_pos -  obj->y_vel, obj->width, obj->height, (unsigned char*)clear_map); 
-	
-	/*
-	int x = obj->x_pos - obj->x_vel, y = obj->y_pos -  obj->y_vel, w = obj->width, h = obj->height;
-	GLCD_SetTextColor(White);
-	for (int i=0; i<w; i+=CLEAR_BOX_SIZE){
-		for(int j=0; j<h; j+=CLEAR_BOX_SIZE){
-			//GLCD_PutPixel(x+i, y+j);
-			GLCD_Bitmap(x+i, y+j, CLEAR_BOX_SIZE, CLEAR_BOX_SIZE, (unsigned char*)clear_map); 
-		}
-	}
-	GLCD_SetTextColor(Black);
-	*/
 }
 
 void draw(_GAME_OBJECT_T* obj){
 	GLCD_Bitmap(obj->x_pos, obj->y_pos, obj->width, obj->height, (unsigned char*)obj->object_bitmap);
 }
-
 
 
 void add_object(OBJECT_LIST_T* list, _GAME_OBJECT_T* object){
@@ -111,10 +98,12 @@ void add_object(OBJECT_LIST_T* list, _GAME_OBJECT_T* object){
 }
 
 int remove_object(OBJECT_LIST_T* list, GAME_OBJECT_T* object){
+	//edge case: list is empty
 	if (list->size == 0){
 		return false;
 	}
 	
+	//edge case: remove the head
 	if (list->head == object){
 		list->head = object->next;
 		
@@ -127,6 +116,7 @@ int remove_object(OBJECT_LIST_T* list, GAME_OBJECT_T* object){
 		return true;
 	}
 	
+	//edge case: remove the tail
 	if (list->tail == object){
 		list->tail = object->prev;
 		
@@ -147,7 +137,7 @@ int remove_object(OBJECT_LIST_T* list, GAME_OBJECT_T* object){
 		curr_obj = curr_obj->next;
 	}
 
-	// list has been exhasuted, object is not in the list
+	//if list has been exhasuted, object is still not in the list, return false
 	if (curr_obj == NULL){
 		return false;
 	}
@@ -161,6 +151,7 @@ int remove_object(OBJECT_LIST_T* list, GAME_OBJECT_T* object){
 	return true;
 }
 
+//remove everything in the list
 void empty_list(OBJECT_LIST_T* list){
 	GAME_OBJECT_T* current_obj = list ->head;
 	if (current_obj != NULL){
@@ -171,6 +162,7 @@ void empty_list(OBJECT_LIST_T* list){
 	}
 }
 
+//draw every node in the list
 void draw_list(OBJECT_LIST_T* list){
 	GAME_OBJECT_T* current_obj = list ->head;
 	if (current_obj != NULL){

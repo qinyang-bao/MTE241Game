@@ -23,8 +23,8 @@
 
 #define GOOSE_MIN_SPAWN_HEIGHT 40
 #define GOOSE_MAX_SPAWN_HEIGHT 200
-#define GOOSE_MIN_SPAWN_INTERVAL 1200
-#define GOOSE_MAX_SPAWN_INTERVAL 1400
+#define GOOSE_MIN_SPAWN_INTERVAL 1100
+#define GOOSE_MAX_SPAWN_INTERVAL 1300
 
 typedef struct{
 	 int x_pos, y_pos, width, height, x_vel, y_vel;
